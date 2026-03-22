@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Habit Tracking</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --purple: #a78bfa;
+    --green: #34d399;
+    --orange: #fb923c;
+    --glass: rgba(255,255,255,0.07);
+    --glass-border: rgba(255,255,255,0.13);
+    --text: rgba(255,255,255,0.9);
+    --muted: rgba(255,255,255,0.45);
+    --faint: rgba(255,255,255,0.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    min-height: 100vh;
+    color: var(--text);
+    padding: 1.5rem 1rem 3rem;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  #stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .star {
+    position: absolute; background: white; border-radius: 50%;
+    animation: twinkle 3s infinite alternate;
+  }
+  @keyframes twinkle {
+    from { opacity: 0.15; transform: scale(1); }
+    to   { opacity: 0.75; transform: scale(1.5); }
+  }
+
+  .wrap {
+    max-width: 520px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 1.4rem 1.5rem;
+  }
+
+  /* ── HEADER ── */
+  .header { text-align: center; padding: 1.6rem 1.5rem 1.2rem; }
+  .header-date { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.5rem; }
+  .header-title { font-size: 26px; font-weight: 600; letter-spacing: 0.02em; }
+
+  /* ── COMPLETED BANNER ── */
+  .completed-banner {
+    display: none;
+    text-align: center;
+    padding: 1rem 1.5rem;
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.35);
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #c4b5fd;
+    letter-spacing: 0.02em;
+  }
+  .completed-banner.show { display: block; }
+
+  /* ── OVERALL RING ── */
+  .ring-card { display: flex; align-items: center; gap: 1.2rem; }
+  .ring-wrap { position: relative; width: 88px; height: 88px; flex-shrink: 0; }
+  .ring-wrap svg { width: 88px; height: 88px; transform: rotate(-90deg); }
+  .ring-bg   { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 8; }
+  .ring-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+  .ring-text {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .ring-pct  { font-size: 18px; font-weight: 600; }
+  .ring-done { font-size: 10px; color: var(--muted); }
+  .ring-info { flex: 1; }
+  .ring-info-title { font-size: 15px; font-weight: 500; margin-bottom: 0.5rem; }
+  .ring-info-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted); margin-bottom: 3px;
+  }
+  .ring-info-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── SECTION ── */
+  .section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .section-label {
+    font-size: 14px; font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .label-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .count-badge {
+    font-size: 12px; color: var(--muted);
+    background: var(--faint);
+    padding: 3px 11px; border-radius: 20px;
+  }
+  .dots-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .dot {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(.34,1.56,.64,1);
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    font-size: 11px; color: var(--muted); font-weight: 500;
+  }
+  .dot:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.45); }
+  .dot.done {
+    border-color: transparent;
+    transform: scale(1.08);
+    animation: pop 0.32s cubic-bezier(.34,1.56,.64,1);
+  }
+  .dot.done::after {
+    content: "";
+    width: 13px; height: 9px;
+    border-left: 2.5px solid #fff;
+    border-bottom: 2.5px solid #fff;
+    transform: rotate(-45deg) translateY(-2px);
+  }
+  @keyframes pop {
+    0%   { transform: scale(0.75); }
+    60%  { transform: scale(1.3); }
+    100% { transform: scale(1.08); }
+  }
+
+  .bar-wrap {
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px; height: 5px;
+    margin-top: 0.8rem; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 99px;
+    transition: width 0.4s ease;
+  }
+
+  /* ── HISTORY ── */
+  .history-title { font-size: 14px; font-weight: 500; margin-bottom: 0.9rem; }
+  .history-empty { font-size: 13px; color: var(--muted); text-align: center; padding: 1rem 0; }
+  .history-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    font-size: 13px;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-date { color: var(--muted); }
+  .history-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .h-badge {
+    font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 500;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: rgba(30,20,60,0.95); border: 1px solid rgba(255,255,255,0.15);
+    color: #fff; font-size: 13px; padding: 0.6rem 1.4rem;
+    border-radius: 99px; opacity: 0; transition: all 0.35s;
+    pointer-events: none; z-index: 999; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── SAVE HINT ── */
+  .save-hint {
+    text-align: center; font-size: 11px; color: rgba(255,255,255,0.25);
+    padding-bottom: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="card header">
+    <div class="header-date" id="hdr-date"></div>
+    <div class="header-title">Habit Tracking</div>
+  </div>
+
+  <!-- COMPLETED BANNER -->
+  <div class="completed-banner" id="completed-banner">
+    ✦ All done for today — great work!
+  </div>
+
+  <!-- OVERALL RING -->
+  <div class="card ring-card">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 88 88">
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#a78bfa"/>
+            <stop offset="100%" stop-color="#34d399"/>
+          </linearGradient>
+        </defs>
+        <circle class="ring-bg" cx="44" cy="44" r="36"/>
+        <circle class="ring-fill" id="ring-circle" cx="44" cy="44" r="36"
+          stroke="url(#ringGrad)" stroke-dasharray="226" stroke-dashoffset="226"/>
+      </svg>
+      <div class="ring-text">
+        <span class="ring-pct" id="ring-pct">0%</span>
+        <span class="ring-done" id="ring-done">0/60</span>
+      </div>
+    </div>
+    <div class="ring-info">
+      <div class="ring-info-title">Today's progress</div>
+      <div class="ring-info-row"><span class="ring-info-dot" style="background:var(--purple);"></span><span id="info-posts">0 / 8 posts</span></div>
+      <div class="ring-info-row"><span class="ring-info-dot" style="background:var(--green);"></span><span id="info-replies">0 / 50 replies</span></div>
+      <div class="ring-info-row"><span class="ring-info-dot" style="background:var(--orange);"></span><span id="info-cold">0 / 2 cold msgs</span></div>
+    </div>
+  </div>
+
+  <!-- POSTS -->
+  <div class="card">
+    <div class="section-header">
+      <div class="section-label"><span class="label-dot" style="background:var(--purple);"></span>Posts</div>
+      <div class="count-badge" id="lbl-posts">0 / 8</div>
+    </div>
+    <div class="dots-row" id="dots-posts"></div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-posts" style="background:var(--purple);width:0%;"></div></div>
+  </div>
+
+  <!-- REPLIES -->
+  <div class="card">
+    <div class="section-header">
+      <div class="section-label"><span class="label-dot" style="background:var(--green);"></span>Replies</div>
+      <div class="count-badge" id="lbl-replies">0 / 50</div>
+    </div>
+    <div class="dots-row" id="dots-replies"></div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-replies" style="background:var(--green);width:0%;"></div></div>
+  </div>
+
+  <!-- COLD MSGS -->
+  <div class="card">
+    <div class="section-header">
+      <div class="section-label"><span class="label-dot" style="background:var(--orange);"></span>Cold messages</div>
+      <div class="count-badge" id="lbl-cold">0 / 2</div>
+    </div>
+    <div class="dots-row" id="dots-cold"></div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-cold" style="background:var(--orange);width:0%;"></div></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="card">
+    <div class="history-title">Past days</div>
+    <div id="history-list"><div class="history-empty">No history yet — complete your first day!</div></div>
+  </div>
+
+  <div class="save-hint">Progress saves automatically</div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SECTIONS = [
+  { id: "posts",   total: 8,  color: "#a78bfa" },
+  { id: "replies", total: 50, color: "#34d399" },
+  { id: "cold",    total: 2,  color: "#fb923c" }
+];
+
+// Get today's date in IST (UTC+5:30)
+function getTodayIST() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+  return ist.toISOString().slice(0, 10);
+}
+
+let state = { posts: 0, replies: 0, cold: 0 };
+
+function loadState() {
+  const today = getTodayIST();
+  // Check if last saved date is different — if so, auto-archive and reset
+  const lastDate = localStorage.getItem("tracker_last_date");
+  if (lastDate && lastDate !== today) {
+    archiveDay(lastDate);
+    state = { posts: 0, replies: 0, cold: 0 };
+    localStorage.removeItem("tracker_today");
+  } else {
+    const saved = localStorage.getItem("tracker_today");
+    if (saved) state = JSON.parse(saved);
+  }
+  localStorage.setItem("tracker_last_date", today);
+}
+
+function saveState() {
+  localStorage.setItem("tracker_today", JSON.stringify(state));
+  localStorage.setItem("tracker_last_date", getTodayIST());
+}
+
+function archiveDay(dateKey) {
+  const saved = localStorage.getItem("tracker_today");
+  if (!saved) return;
+  const s = JSON.parse(saved);
+  const total = s.posts + s.replies + s.cold;
+  if (total === 0) return; // don't save empty days
+  const history = getHistory();
+  history[dateKey] = {
+    posts: s.posts, replies: s.replies, cold: s.cold,
+    total, completed: total === 60
+  };
+  saveHistory(history);
+}
+
+function checkMidnightReset() {
+  const today = getTodayIST();
+  const lastDate = localStorage.getItem("tracker_last_date");
+  if (lastDate && lastDate !== today) {
+    archiveDay(lastDate);
+    state = { posts: 0, replies: 0, cold: 0 };
+    localStorage.removeItem("tracker_today");
+    localStorage.setItem("tracker_last_date", today);
+    buildDots();
+    updateUI();
+    renderHistory();
+    setDate();
+    showToast("New day started — let's go!");
+  }
+}
+
+// Check every 30 seconds for midnight IST crossing
+setInterval(checkMidnightReset, 30000);
+
+function buildDots() {
+  SECTIONS.forEach(s => {
+    const container = document.getElementById("dots-" + s.id);
+    container.innerHTML = "";
+    for (let i = 0; i < s.total; i++) {
+      const d = document.createElement("div");
+      d.className = "dot" + (i < state[s.id] ? " done" : "");
+      if (i < state[s.id]) d.style.background = s.color + "44";
+      if (s.total > 20 && i >= state[s.id]) d.textContent = i + 1;
+      d.onclick = () => toggleDot(s.id, i, s.color, s.total);
+      container.appendChild(d);
+    }
+  });
+}
+
+function toggleDot(sid, idx, color, total) {
+  state[sid] = idx < state[sid] ? idx : idx + 1;
+  const container = document.getElementById("dots-" + sid);
+  container.querySelectorAll(".dot").forEach((d, i) => {
+    d.classList.toggle("done", i < state[sid]);
+    d.style.background = i < state[sid] ? color + "44" : "";
+    if (total > 20) d.textContent = i < state[sid] ? "" : i + 1;
+  });
+  saveState();
+  updateUI();
+
+  // Auto-save to history when day is completed
+  const done = state.posts + state.replies + state.cold;
+  if (done === 60) {
+    const today = getTodayIST();
+    const history = getHistory();
+    history[today] = { posts: state.posts, replies: state.replies, cold: state.cold, total: 60, completed: true };
+    saveHistory(history);
+    renderHistory();
+  }
+}
+
+function updateUI() {
+  const done = state.posts + state.replies + state.cold;
+  const pct  = Math.round((done / 60) * 100);
+
+  SECTIONS.forEach(s => {
+    document.getElementById("bar-" + s.id).style.width = Math.round((state[s.id] / s.total) * 100) + "%";
+    document.getElementById("lbl-" + s.id).textContent = state[s.id] + " / " + s.total;
+  });
+
+  document.getElementById("info-posts").textContent   = state.posts   + " / 8 posts";
+  document.getElementById("info-replies").textContent = state.replies + " / 50 replies";
+  document.getElementById("info-cold").textContent    = state.cold    + " / 2 cold msgs";
+  document.getElementById("ring-pct").textContent     = pct + "%";
+  document.getElementById("ring-done").textContent    = done + "/60";
+
+  const circ = 2 * Math.PI * 36;
+  document.getElementById("ring-circle").style.strokeDashoffset = circ - (pct / 100) * circ;
+
+  const banner = document.getElementById("completed-banner");
+  if (done === 60) {
+    banner.classList.add("show");
+  } else {
+    banner.classList.remove("show");
+  }
+}
+
+function getHistory() {
+  const h = localStorage.getItem("tracker_history");
+  return h ? JSON.parse(h) : {};
+}
+
+function saveHistory(data) {
+  localStorage.setItem("tracker_history", JSON.stringify(data));
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const keys = Object.keys(history).sort().reverse().slice(0, 30);
+  const el = document.getElementById("history-list");
+  if (keys.length === 0) {
+    el.innerHTML = '<div class="history-empty">No history yet — complete your first day!</div>';
+    return;
+  }
+  el.innerHTML = keys.map(k => {
+    const d = history[k];
+    const date = new Date(k + "T00:00:00");
+    const label = date.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" });
+    const pct = Math.round((d.total / 60) * 100);
+    const bc = pct === 100 ? "#a78bfa" : pct >= 75 ? "#34d399" : pct >= 40 ? "#fb923c" : "#888";
+    return `
+      <div class="history-item">
+        <span class="history-date">${label}</span>
+        <div class="history-badges">
+          <span class="h-badge" style="background:${bc}22;color:${bc};">${pct}%</span>
+          <span class="h-badge" style="background:rgba(167,139,250,0.1);color:#c4b5fd;">${d.posts}/8</span>
+          <span class="h-badge" style="background:rgba(52,211,153,0.1);color:#6ee7b7;">${d.replies}/50</span>
+          <span class="h-badge" style="background:rgba(251,146,60,0.1);color:#fdba74;">${d.cold}/2</span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function setDate() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  document.getElementById("hdr-date").textContent =
+    ist.toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+function makeStars() {
+  const c = document.getElementById("stars");
+  for (let i = 0; i < 70; i++) {
+    const s = document.createElement("div");
+    s.className = "star";
+    const size = Math.random() * 2.5 + 0.8;
+    s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;animation-delay:${(Math.random()*5).toFixed(1)}s;animation-duration:${(2+Math.random()*3).toFixed(1)}s`;
+    c.appendChild(s);
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2800);
+}
+
+makeStars();
+setDate();
+loadState();
+buildDots();
+updateUI();
+renderHistory();
+</script>
+</body>
+</html>
